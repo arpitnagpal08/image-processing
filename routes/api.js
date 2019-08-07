@@ -20,6 +20,6 @@ const upload = multer({ dest: `${path.resolve(path.join('./my-uploads'))}` })
 
 // Route to upload image
 router.get("/", services.getIndexFile);
-router.post("/image_upload", upload.array('avatar', 10), services.upload_image);
+router.post("/image_upload", upload.array('avatar', 500), services.upload_image);
 
 module.exports = router;
