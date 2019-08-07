@@ -15,8 +15,6 @@ exports.upload_image          = upload_image;
 exports.getIndexFile          = getIndexFile;
 
 function upload_image(req, res, callback) {
-  const filename1 = `R-${req.file.originalname}-${Date.now()}.${req.file.mimetype.split('/')[1]}`;
-  const filename2 = `L-${req.file.originalname}-${Date.now()}.${req.file.mimetype.split('/')[1]}`;
   const filepath =  path.resolve(path.join('./my-uploads'))
 
   let image_process = new Promise((resolve, reject) => {
@@ -30,10 +28,12 @@ function upload_image(req, res, callback) {
         reject(error);
       } else {
         // removes original file
-        fs.unlink(req.file.path, (err) => {
-          if(err)
-            console.log(err)
-        })
+        for(let file of req.files) {
+          fs.unlink(file.path, (err) => {
+            if(err)
+              console.log(err)
+          })
+        }
         // if no error then display success
         resolve(resp);
       }
@@ -42,10 +42,7 @@ function upload_image(req, res, callback) {
   .then(data => {
     response.status = 1;
     response.message = "Image cropped successfully.";
-    response.data = {
-      file1: filename1,
-      file2: filename2
-    }
+    response.data = {}
     response.apiReference = "/image_upload"
     res.redirect(`/`)
   })
@@ -58,43 +55,56 @@ function upload_image(req, res, callback) {
 
   function readImage(cb) {
     // read file
-    Jimp.read(req.file.path)
-      .then(lemma => {
-        cb(null, {width: lemma.bitmap.width, height: lemma.bitmap.height, lemma: lemma, file: req.file.path});
-      })
+    let arr = [];
+    for(let file of req.files) {
+      Jimp.read(file.path)
+        .then(lemma => {
+          arr.push({width: lemma.bitmap.width, height: lemma.bitmap.height, lemma: lemma, file: file})
+          if(arr.length == req.files.length)
+            cb(null, arr);
+        })
+    }
   }
 
-  function cropImagePart1(data, cb) {
+  function cropImagePart1(images, cb) {
     // get first part of image
-    data.lemma.crop(0, 1, data.width, data.height/2, (err) => {
-      if(err)
-        console.log(err)
-    })
-    .resize(260, 260)
-    .write(`${filepath}/${filename1}`)
-    cb(null, data);
-  }
-
-  function cropImagePart2(data, cb) {
-    // get second part of image
-    Jimp.read(data.file)
-    .then(lemma => {
-      lemma.flip(false, true, (err) => {
-        if(err)
-          console.log(err)
-      })
-      .crop(0, 1, data.width, data.height/2, (err) => {
-        if(err)
-          console.log(err)
-      })
-      .flip(false, true, err => {
+    images.forEach(data => {
+      data.lemma.crop(0, 0, data.width/2, data.height, (err) => {
         if(err)
           console.log(err)
       })
       .resize(260, 260)
-      .write(`${filepath}/${filename2}`)
+      .write(`${filepath}/L-${data.file.originalname}-${Date.now()}.${data.file.mimetype.split('/')[1]}`)
+    });
+    cb(null, images);
+
+  }
+
+  function cropImagePart2(images, cb) {
+    let count = 0;
+    images.forEach(data => {
+      // get second part of image
+      Jimp.read(data.file.path)
+      .then(lemma => {
+        lemma.flip(true, false, (err) => {
+          if(err)
+            console.log(err)
+        })
+        .crop(0, 0, data.width/2, data.height, (err) => {
+          if(err)
+            console.log(err)
+        })
+        .flip(true, false, err => {
+          if(err)
+            console.log(err)
+        })
+        .resize(260, 260)
+        .write(`${filepath}/R-${data.file.originalname}-${Date.now()}.${data.file.mimetype.split('/')[1]}`)
+        count += 1;
+        if(count == images.length) 
+          cb(null, images)
+      })
     })
-    cb(null, data)
   }
 
 }
